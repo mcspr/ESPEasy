@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+      fail-fast: ${{ ! (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -50,7 +51,6 @@ jobs:
         env:
           CHIP: ${{ matrix.chip }}
           ENV: ${{ matrix.env }}
-        continue-on-error: true
         run: |
           python tools/ci/build-and-archive.py
       - uses: actions/upload-artifact@v2
