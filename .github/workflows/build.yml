@@ -115,4 +115,4 @@ jobs:
         run: |
           ls -R
           pip install PyGithub
-          python3 artifact/tools/ci/upload-release.py
+          python3 artifact/tools/ci/upload-release.py ./
