@@ -1,9 +1,9 @@
-# in case this needs to download artifacts, need to workaround the issue with action/download-artifact & workflow_run event:
+# workflow_run does not always work with default action/..., using script to retrieve info:
 # - https://github.com/actions/download-artifact/issues/60
 # - https://github.com/github/docs/issues/4612#issuecomment-835830446
 # - https://github.com/deephaven/deephaven-core/blob/main/.github/workflows/publish-check-ci.yml
 #
-# e.g.
+# e.g. to download previous workflow artifacts:
 #
 # ```js
 # var binaries = artifacts.data.artifacts.filter((artifact) => {
@@ -22,31 +22,30 @@
 # ```js
 # require('fs').writeFileSync('${{github.workspace}}/Binaries.zip', Buffer.from(download.data));
 # ```
+#
+# NOTICE workflow_run event will only trigger a workflow run if the workflow file is on the default branch.
 
 name: Release
 
 on:
   workflow_run:
     workflows: ["Build"]
+    branches: [ghactions-order]
     types: [completed]
 
 jobs:
   dummy:
     runs-on: ubuntu-20.04
     steps:
-      - name: Dump workflow_run ctx
-        env:
-          EVENT_WORKFLOW_RUN_JSON: ${{ toJSON(github.event.workflow_run) }}
-        run: echo "$EVENT_WORKFLOW_RUN_JSON"
-      - name: List artifacts from the workflow_run event
-        uses: actions/github-script@v4.0.2
+      - uses: actions/github-script@v4.0.2
         with:
           script: |
-            var artifacts = await github.actions.listWorkflowArtifacts({
+            var request = {
               owner: context.repo.owner,
               repo: context.repo.repo,
               run_id: ${{ github.event.workflow_run.id }}
-            });
-            artifacts.forEach((artifact) => {
-              console.log(artifact);
-            });
+            };
+            var workflow = await github.actions.getWorkflowRun(request);
+            console.log(workflow);
+            var artifacts = await github.actions.listWorkflowRunArtifacts(request);
+            console.log(artifacts);
