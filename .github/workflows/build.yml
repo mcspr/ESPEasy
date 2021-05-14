@@ -1,3 +1,5 @@
+# Checks whether the pushed commit can be build with PIO. Only triggered on normal push to the mega branch without tag and with pull requests targeting mega
+
 name: Build
 
 on:

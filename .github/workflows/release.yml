@@ -1,62 +1,81 @@
-# workflow_run does not always work with default action/..., using script to retrieve info:
-# - https://github.com/actions/download-artifact/issues/60
-# - https://github.com/github/docs/issues/4612#issuecomment-835830446
-# - https://github.com/deephaven/deephaven-core/blob/main/.github/workflows/publish-check-ci.yml
+# TODO: consider updating requirements.txt for the documentation step,
+#       as it does not work with python versions >3.8
 #
-# e.g. to download previous workflow artifacts:
+# NOTICE the generate-matrix and build are c/p from the build workflow
+# NOTICE manual deletion following a re-created tag and push will also trigger this
 #
-# ```js
-# var binaries = artifacts.data.artifacts.filter((artifact) => {
-#   return artifact.name == "Binaries";
-# });
-# var download = await github.actions.downloadArtifact({
-#   owner: context.repo.owner,
-#   repo: context.repo.repo,
-#   artifact_id: binaries.id,
-#   archive_format: 'zip'
-# });
-# ```
-# 
-# ... and then work with Binaries.zip / Binaries/ dir
-#
-# ```js
-# require('fs').writeFileSync('${{github.workspace}}/Binaries.zip', Buffer.from(download.data));
-# ```
-#
-# NOTICE workflow_run event will only trigger a workflow run if the workflow file is on the default branch.
+# Checks whether the pushed commit is buildable and creates a release with the provided tag. Only triggered on mega-* tag push
+# Every build artifact is merged in a single .zip file, which is then uploaded as a single release asset
 
 name: Release
 
 on:
-  workflow_run:
-    workflows: ["Build"]
+  push:
     branches: [ghactions-order]
-    types: [completed]
+    tags: 'test-*'
 
 jobs:
-  prepare-binaries:
-    runs-on: ubuntu-20.04
-    steps:
-      - uses: actions/github-script@v4
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            var request = {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: ${{ github.event.workflow_run.id }}
-            };
-            var workflow = await github.actions.getWorkflowRun(request);
-            console.log(workflow);
-            var artifacts = await github.actions.listWorkflowRunArtifacts(request);
-            console.log(artifacts);
-            core.setFailed('do not continue until everything works');
-
-  prepare-docs:
-    needs: [prepare-binaries]
+  generate-matrix:
     runs-on: ubuntu-20.04
     outputs:
-      message: ${{ steps.release-notes.outputs.message }}
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+      - id: set-matrix
+        run: |
+          pip install platformio
+          python tools/ci/generate-matrix.py
+
+  build:
+    needs: generate-matrix
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+      - uses: actions/cache@v2
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+      - uses: actions/cache@v2
+        if: ${{ contains(matrix.env, 'esp32') }}
+        with:
+          path: ~/.platformio
+          key: ${{ runner.os }}-esp32-${{ hashFiles('platformio*.ini') }}
+      - uses: actions/cache@v2
+        if: ${{ contains(matrix.env, 'esp8266') }}
+        with:
+          path: ~/.platformio
+          key: ${{ runner.os }}-esp8266-${{ hashFiles('platformio*.ini') }}
+      - name: Dependencies
+        run: |
+          sudo apt install binutils
+          pip install -r requirements.txt
+          platformio update
+      - name: Build and archive
+        id: build-and-archive
+        env:
+          CHIP: ${{ matrix.chip }}
+          ENV: ${{ matrix.env }}
+        run: |
+          python tools/ci/build-and-archive.py
+      - uses: actions/upload-artifact@v2
+        with:
+          name: Binaries
+          path: ESPEasy_${{ matrix.env }}.zip
+          if-no-files-found: ignore
+
+  prepare-dist:
+    needs: build
+    runs-on: ubuntu-20.04
+    outputs:
+      notes: ${{ steps.release-notes.outputs.notes }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -83,7 +102,7 @@ jobs:
         id: release-notes
         run: |
           git fetch --force origin ${GITHUB_REF}:${GITHUB_REF} # see https://github.com/actions/checkout/issues/290
-          echo ::set-output name=message::$(git --no-pager tag -l --format="%(contents)" ${GITHUB_REF:10})
+          echo ::set-output name=notes::$(git --no-pager tag -l --format="%(contents)" ${GITHUB_REF:10})
       - uses: actions/upload-artifact@v2
         with:
           path: |
@@ -93,7 +112,7 @@ jobs:
 
   release:
     runs-on: ubuntu-20.04
-    needs: [prepare-docs]
+    needs: [build, prepare-dist]
     steps:
       - uses: actions/setup-python@v2
         with:
@@ -104,7 +123,7 @@ jobs:
       - name: Create release
         working-directory: artifacts/
         env:
-          RELEASE_NOTES: ${{ needs.release-files.outputs.message }}
+          RELEASE_NOTES: ${{ needs.prepare-dist.outputs.notes }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ls -R
