@@ -106,7 +106,7 @@ jobs:
         env:
           RELEASE_NOTES: ${{ needs.release-files.outputs.message }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          run: |
-            ls -R
-            pip install PyGithub==1.55
-            python3 artifact/tools/ci/upload-release.py ./
+        run: |
+          ls -R
+          pip install PyGithub==1.55
+          python3 artifact/tools/ci/upload-release.py ./
