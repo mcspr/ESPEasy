@@ -25,6 +25,19 @@ jobs:
             console.log(context.repo.repo);
             console.log(context.sha);
             console.log(context.ref);
+
+            const tagRefObj = await github.git.getRef({
+              ...context.repo,
+              ref: context.ref.replace('refs/', '')
+            });
+            console.log(tagRefObj.obj.sha);
+
+            const tagObj = await github.git.getTag({
+              ...context.repo,
+              tag_sha: tagRefObj.obj.sha
+            });
+            console.log(tagObj.message);
+
             core.setFailed('do not continue until everything works');
 
   generate-matrix:
