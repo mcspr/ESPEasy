@@ -30,15 +30,13 @@ jobs:
               ...context.repo,
               ref: context.ref.replace('refs/', '')
             });
-            console.log(tagRefObj);
-            console.log(tagRefObj.object.sha);
+            console.log(tagRefObj.data.object.sha);
 
             const tagObj = await github.git.getTag({
               ...context.repo,
-              tag_sha: tagRefObj.object.sha
+              tag_sha: tagRefObj.data.object.sha
             });
-            console.log(tagObj);
-            console.log(tagObj.message);
+            console.log(tagObj.data.message);
 
             core.setFailed('do not continue until everything works');
 
