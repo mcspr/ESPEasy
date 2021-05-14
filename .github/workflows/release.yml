@@ -1,0 +1,55 @@
+# in case this needs to download artifacts, need to workaround the issue with action/download-artifact & workflow_run event:
+# - https://github.com/actions/download-artifact/issues/60
+# - https://github.com/github/docs/issues/4612#issuecomment-835830446
+# - https://github.com/deephaven/deephaven-core/blob/main/.github/workflows/publish-check-ci.yml
+#
+# e.g.
+#
+# ```js
+# var binaries = artifacts.data.artifacts.filter((artifact) => {
+#   return artifact.name == "Binaries";
+# });
+# var download = await github.actions.downloadArtifact({
+#   owner: context.repo.owner,
+#   repo: context.repo.repo,
+#   artifact_id: binaries.id,
+#   archive_format: 'zip'
+# });
+# ```
+# 
+# ... and then work with Binaries.zip / Binaries/ dir
+#
+# ```js
+# require('fs').writeFileSync('${{github.workspace}}/Binaries.zip', Buffer.from(download.data));
+# ```
+
+name: Release
+
+on:
+  workflow_run:
+    workflows: ["Build"]
+    branches: [ghactions-order]
+    types:
+      - completed
+      - requested
+
+jobs:
+  dummy:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Dump workflow_run ctx
+        env:
+          EVENT_WORKFLOW_RUN_JSON: ${{ toJSON(github.event.workflow_run) }}
+        run: echo "$EVENT_WORKFLOW_RUN_JSON"
+      - name: List artifacts from the workflow_run event
+        uses: actions/github-script@v4.0.2
+        with:
+          script: |
+            var artifacts = await github.actions.listWorkflowArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: ${{ github.event.workflow_run.id }}
+            });
+            artifacts.forEach((artifact) => {
+              console.log(artifact);
+            });
