@@ -30,11 +30,11 @@ jobs:
               ...context.repo,
               ref: context.ref.replace('refs/', '')
             });
-            console.log(tagRefObj.obj.sha);
+            console.log(tagRefObj.object.sha);
 
             const tagObj = await github.git.getTag({
               ...context.repo,
-              tag_sha: tagRefObj.obj.sha
+              tag_sha: tagRefObj.object.sha
             });
             console.log(tagObj.message);
 
