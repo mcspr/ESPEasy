@@ -34,11 +34,12 @@ on:
     types: [completed]
 
 jobs:
-  dummy:
+  prepare-binaries:
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/github-script@v4.0.2
+      - uses: actions/github-script@v4
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             var request = {
               owner: context.repo.owner,
@@ -49,3 +50,63 @@ jobs:
             console.log(workflow);
             var artifacts = await github.actions.listWorkflowRunArtifacts(request);
             console.log(artifacts);
+            core.setFailed('do not continue until everything works');
+
+  prepare-docs:
+    needs: [prepare-binaries]
+    runs-on: ubuntu-20.04
+    outputs:
+      message: ${{ steps.release-notes.outputs.message }}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+      - uses: actions/cache@v2
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-docs-${{ hashFiles('requirements.txt') }}
+      - name: Build documentation
+        run: |
+          cd docs
+          sudo apt install imagemagick zip
+          pip install -r requirements.txt
+          make html
+          cd ..
+          zip -r -qq ESPEasy_docs.zip docs/build/*
+      - name: Package utilities
+        run: |
+          cd dist
+          zip -r -qq ../ESPEasy_dist.zip *
+          cd ..
+      - name: Extract release notes
+        id: release-notes
+        run: |
+          git fetch --force origin ${GITHUB_REF}:${GITHUB_REF} # see https://github.com/actions/checkout/issues/290
+          echo ::set-output name=message::$(git --no-pager tag -l --format="%(contents)" ${GITHUB_REF:10})
+      - uses: actions/upload-artifact@v2
+        with:
+          path: |
+            tools/ci/upload-release.py
+            ESPEasy_docs.zip
+            ESPEasy_dist.zip
+
+  release:
+    runs-on: ubuntu-20.04
+    needs: [prepare-docs]
+    steps:
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+      - uses: actions/download-artifact@v2
+        with:
+          path: artifacts/
+      - name: Create release
+        working-directory: artifacts/
+        env:
+          RELEASE_NOTES: ${{ needs.release-files.outputs.message }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          run: |
+            ls -R
+            pip install PyGithub==1.55
+            python3 artifact/tools/ci/upload-release.py ./
