@@ -33,7 +33,7 @@ if __name__ == "__main__":
     #jobs = list(filter_jobs(get_jobs(ProjectConfig.get_instance())))
     jobs = [
         {"chip": "esp8266", "env": "custom_ESP8266_4M1M"},
-        {"chip": "esp32", "env": "custom_ESP8266_4M316k"}
+        {"chip": "esp32", "env": "custom_ESP32_4M316k"}
     ]
 
     sort = []
