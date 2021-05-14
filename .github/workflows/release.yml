@@ -15,33 +15,7 @@ on:
     tags: 'test-*'
 
 jobs:
-  dump-stuff:
-    runs-on: ubuntu-20.04
-    steps:
-      - uses: actions/github-script@v4
-        with:
-          script: |
-            console.log(context.repo.owner);
-            console.log(context.repo.repo);
-            console.log(context.sha);
-            console.log(context.ref);
-
-            const tagRefObj = await github.git.getRef({
-              ...context.repo,
-              ref: context.ref.replace('refs/', '')
-            });
-            console.log(tagRefObj.data.object.sha);
-
-            const tagObj = await github.git.getTag({
-              ...context.repo,
-              tag_sha: tagRefObj.data.object.sha
-            });
-            console.log(tagObj.data.message);
-
-            core.setFailed('do not continue until everything works');
-
   generate-matrix:
-    needs: dump-stuff
     runs-on: ubuntu-20.04
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -133,14 +107,24 @@ jobs:
     needs: build
     runs-on: ubuntu-20.04
     outputs:
-      notes: ${{ steps.release-notes.outputs.notes }}
+      notes: ${{ steps.release-notes.outputs.result }}
     steps:
-      - uses: actions/checkout@v2
-      - name: Extract release notes
-        id: release-notes
-        run: |
-          git fetch --force origin ${GITHUB_REF}:${GITHUB_REF} # see https://github.com/actions/checkout/issues/290
-          echo ::set-output name=notes::$(git --no-pager tag -l --format="%(contents)" ${GITHUB_REF:10})
+      - id: release-notes
+        uses: actions/github-script@v4
+        with:
+          result-encoding: string
+          script: |
+            const tagRefObj = await github.git.getRef({
+              ...context.repo,
+              ref: context.ref.replace('refs/', '')
+            });
+
+            const tagObj = await github.git.getTag({
+              ...context.repo,
+              tag_sha: tagRefObj.data.object.sha
+            });
+
+            return tagObj.data.message;
 
   release:
     needs: [build, prepare-dist, prepare-notes]
