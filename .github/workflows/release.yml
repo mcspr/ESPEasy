@@ -15,7 +15,20 @@ on:
     tags: 'test-*'
 
 jobs:
+  dump-stuff:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/github-script@v4
+        with:
+          script: |
+            console.log(context.repo.owner);
+            console.log(context.repo.repo);
+            console.log(context.sha);
+            console.log(context.ref);
+            core.setFailed('do not continue until everything works');
+
   generate-matrix:
+    needs: dump-stuff
     runs-on: ubuntu-20.04
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -74,8 +87,6 @@ jobs:
   prepare-dist:
     needs: build
     runs-on: ubuntu-20.04
-    outputs:
-      notes: ${{ steps.release-notes.outputs.notes }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -98,11 +109,6 @@ jobs:
           cd dist
           zip -r -qq ../ESPEasy_dist.zip *
           cd ..
-      - name: Extract release notes
-        id: release-notes
-        run: |
-          git fetch --force origin ${GITHUB_REF}:${GITHUB_REF} # see https://github.com/actions/checkout/issues/290
-          echo ::set-output name=notes::$(git --no-pager tag -l --format="%(contents)" ${GITHUB_REF:10})
       - uses: actions/upload-artifact@v2
         with:
           path: |
@@ -110,9 +116,22 @@ jobs:
             ESPEasy_docs.zip
             ESPEasy_dist.zip
 
-  release:
+  prepare-notes:
+    needs: build
     runs-on: ubuntu-20.04
-    needs: [build, prepare-dist]
+    outputs:
+      notes: ${{ steps.release-notes.outputs.notes }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Extract release notes
+        id: release-notes
+        run: |
+          git fetch --force origin ${GITHUB_REF}:${GITHUB_REF} # see https://github.com/actions/checkout/issues/290
+          echo ::set-output name=notes::$(git --no-pager tag -l --format="%(contents)" ${GITHUB_REF:10})
+
+  release:
+    needs: [build, prepare-dist, prepare-notes]
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/setup-python@v2
         with:
@@ -123,7 +142,7 @@ jobs:
       - name: Create release
         working-directory: artifacts/
         env:
-          RELEASE_NOTES: ${{ needs.prepare-dist.outputs.notes }}
+          RELEASE_NOTES: ${{ needs.prepare-notes.outputs.notes }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ls -R
