@@ -11,7 +11,7 @@ name: Release
 
 on:
   push:
-    branches: [ghactions-order]
+    branches-ignore: '**'
     tags: 'test-*'
 
 jobs:
@@ -30,12 +30,14 @@ jobs:
               ...context.repo,
               ref: context.ref.replace('refs/', '')
             });
+            console.log(tagRefObj);
             console.log(tagRefObj.object.sha);
 
             const tagObj = await github.git.getTag({
               ...context.repo,
               tag_sha: tagRefObj.object.sha
             });
+            console.log(tagObj);
             console.log(tagObj.message);
 
             core.setFailed('do not continue until everything works');
