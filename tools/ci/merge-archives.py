@@ -1,9 +1,9 @@
 import sys
+import argparse
 import os
 import pathlib
 from itertools import chain
 from zipfile import ZipFile
-from github import Github
 
 
 class NoZipFilesFound(Exception):
@@ -28,21 +28,13 @@ def merge_zip(target, sources):
 
 
 if __name__ == "__main__":
-    # artifacts/Binaries/ - .elf + .bin
-    # artifacts/artifact/ - docs, upload tools, etc.
-    sources = [str(zip_file) for zip_file in find_zip(sys.argv[1])]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--source", required=True)
+    parser.add_argument("--target", required=True)
+
+    args = parser.parse_args()
+    sources = find_zip(args.source)
     if not sources:
         raise NoZipFilesFound
 
-    tag = os.environ["GITHUB_REF"][len("refs/tags/") :]
-    message = os.environ.get("RELEASE_NOTES", tag)
-
-    gh = Github(os.environ["GITHUB_TOKEN"])
-    repo = gh.get_repo(os.environ["GITHUB_REPOSITORY"])
-
-    target = "ESPEasy_{}.zip".format(tag)
-    print("preparing target={} from {} sources".format(target, len(sources)))
-    merge_zip(target, sources)
-
-    release = repo.create_git_release(tag=tag, name=tag, message=message)
-    release.upload_asset(target)
+    merge_zip(args.target, sources)

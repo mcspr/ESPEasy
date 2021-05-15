@@ -5,7 +5,8 @@
 # NOTICE manual deletion following a re-created tag and push will also trigger this
 #
 # Checks whether the pushed commit is buildable and creates a release with the provided tag. Only triggered on mega-* tag push
-# Every build artifact is merged in a single .zip file, which is then uploaded as a single release asset
+# Documentation and distribution files (tools, readme, etc.) are uploaded as .zip files prepared similarly to the build_ESPEasy.sh
+# Every .bin build artifact is merged in a single .zip file, which is then uploaded as a single release asset
 
 name: Release
 
@@ -98,10 +99,14 @@ jobs:
           cd ..
       - uses: actions/upload-artifact@v2
         with:
+          name: Distribution
           path: |
-            tools/ci/upload-release.py
             ESPEasy_docs.zip
             ESPEasy_dist.zip
+      - uses: actions/upload-artifact@v2
+        with:
+          path: |
+            tools/ci/merge-archives.py
 
   prepare-notes:
     needs: build
@@ -136,12 +141,12 @@ jobs:
       - uses: actions/download-artifact@v2
         with:
           path: artifacts/
-      - name: Create release
-        working-directory: artifacts/
-        env:
-          RELEASE_NOTES: ${{ needs.prepare-notes.outputs.notes }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          ls -R
-          pip install PyGithub==1.55
-          python3 artifact/tools/ci/upload-release.py ./
+      - run: |
+          python3 artifacts/artifact/tools/ci/merge-archives.py \
+              --source artifacts/Binaries \
+              --target ESPEasy_binaries.zip
+      - uses: ncipollo/release-action@v1
+        with:
+          artifacts: "ESPEasy_binaries.zip,artifacts/Distribution/*.zip"
+          body: ${{ needs.prepare-notes.outputs.notes }}
+          token: ${{ secrets.GITHUB_TOKEN }}
