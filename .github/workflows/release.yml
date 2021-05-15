@@ -103,10 +103,6 @@ jobs:
           path: |
             ESPEasy_docs.zip
             ESPEasy_dist.zip
-      - uses: actions/upload-artifact@v2
-        with:
-          path: |
-            tools/ci/merge-archives.py
 
   prepare-notes:
     needs: build
@@ -142,9 +138,10 @@ jobs:
         with:
           path: artifacts/
       - run: |
-          python3 artifacts/artifact/tools/ci/merge-archives.py \
-              --source artifacts/Binaries \
-              --target ESPEasy_binaries.zip
+          pwd
+          ls -R
+          sudo apt-get install -y zipmerge
+          zipmerge ESPEasy_binaries.zip artifacts/Binaries/*.zip
       - uses: ncipollo/release-action@v1
         with:
           artifacts: "ESPEasy_binaries.zip,artifacts/Distribution/*.zip"
